@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会议主持人抽签</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 20px;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  h1 {
+    font-size: 2rem;
+    letter-spacing: 4px;
+    margin-bottom: 8px;
+    background: linear-gradient(90deg, #f9d423, #ff4e50);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+  }
+
+  .subtitle {
+    font-size: 0.9rem;
+    color: #aaa;
+    margin-bottom: 30px;
+    letter-spacing: 2px;
+  }
+
+  .main-layout {
+    display: flex;
+    gap: 30px;
+    width: 100%;
+    max-width: 900px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* ── Slot machine ── */
+  .slot-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    flex: 0 0 auto;
+  }
+
+  .slot-machine {
+    width: 300px;
+    height: 90px;
+    background: rgba(255,255,255,0.05);
+    border: 2px solid rgba(255,215,0,0.4);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 30px rgba(255,215,0,0.15), inset 0 0 20px rgba(0,0,0,0.3);
+  }
+
+  .slot-machine::before,
+  .slot-machine::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 28px;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .slot-machine::before {
+    top: 0;
+    background: linear-gradient(to bottom, rgba(15,12,41,0.95), transparent);
+  }
+  .slot-machine::after {
+    bottom: 0;
+    background: linear-gradient(to top, rgba(15,12,41,0.95), transparent);
+  }
+
+  .slot-reel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 0.05s linear;
+    will-change: transform;
+  }
+
+  .slot-item {
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #f0e68c;
+    white-space: nowrap;
+    padding: 0 20px;
+    text-shadow: 0 0 10px rgba(240,230,140,0.5);
+  }
+
+  .highlight-line {
+    position: absolute;
+    top: 50%;
+    left: 0; right: 0;
+    height: 2px;
+    transform: translateY(-50%);
+    background: linear-gradient(90deg, transparent, rgba(255,215,0,0.8), transparent);
+    z-index: 3;
+  }
+
+  /* ── Winner display ── */
+  .winner-box {
+    width: 300px;
+    min-height: 90px;
+    background: rgba(255,215,0,0.08);
+    border: 2px solid transparent;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #ffd700;
+    text-align: center;
+    padding: 15px;
+    transition: all 0.5s;
+    letter-spacing: 1px;
+  }
+
+  .winner-box.revealed {
+    border-color: #ffd700;
+    box-shadow: 0 0 30px rgba(255,215,0,0.4);
+    animation: winnerPulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes winnerPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(255,215,0,0.3); }
+    50% { box-shadow: 0 0 50px rgba(255,215,0,0.7); }
+  }
+
+  /* ── Button ── */
+  .btn-draw {
+    padding: 14px 50px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #f9d423, #ff4e50);
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 20px rgba(249,212,35,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+
+  .btn-draw:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 28px rgba(249,212,35,0.6);
+  }
+
+  .btn-draw:active:not(:disabled) { transform: translateY(0); }
+
+  .btn-draw:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ── Participants list ── */
+  .participants-panel {
+    flex: 1;
+    min-width: 220px;
+    max-width: 340px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .panel-title {
+    font-size: 0.85rem;
+    letter-spacing: 3px;
+    color: #aaa;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+  }
+
+  .participant-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .p-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px 5px 12px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #ddd;
+    transition: all 0.4s;
+    cursor: default;
+  }
+
+  .p-tag.eliminated {
+    background: rgba(255,255,255,0.02);
+    border-color: rgba(255,255,255,0.04);
+    color: #444;
+    text-decoration: line-through;
+  }
+
+  .p-tag.winner-tag {
+    background: rgba(255,215,0,0.2);
+    border-color: #ffd700;
+    color: #ffd700;
+    font-weight: 700;
+  }
+
+  .p-tag .del-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.15);
+    color: #aaa;
+    font-size: 0.7rem;
+    cursor: pointer;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: background 0.2s, color 0.2s;
+  }
+  .p-tag .del-btn:hover { background: rgba(255,80,80,0.6); color: #fff; }
+  .p-tag.eliminated .del-btn,
+  .p-tag.winner-tag .del-btn { display: none; }
+
+  .add-participant-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .add-input {
+    flex: 1;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.07);
+    color: #fff;
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .add-input::placeholder { color: #666; }
+  .add-input:focus { border-color: rgba(255,215,0,0.5); }
+
+  .add-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,215,0,0.4);
+    background: rgba(255,215,0,0.12);
+    color: #ffd700;
+    font-size: 0.82rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+  .add-btn:hover { background: rgba(255,215,0,0.25); }
+
+  /* ── Confetti canvas ── */
+  #confetti-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ── History ── */
+  .history-section {
+    width: 100%;
+    max-width: 900px;
+    margin-top: 24px;
+  }
+
+  .history-title {
+    font-size: 0.78rem;
+    color: #777;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+
+  .history-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .history-chip {
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    background: rgba(255,78,80,0.15);
+    border: 1px solid rgba(255,78,80,0.3);
+    color: #ff9a9b;
+  }
+
+  .btn-reset {
+    margin-top: 18px;
+    padding: 8px 26px;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 30px;
+    background: transparent;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-reset:hover { border-color: #fff; color: #fff; }
+</style>
+</head>
+<body>
+
+<canvas id="confetti-canvas"></canvas>
+
+<h1>🎯 主持人抽签</h1>
+<p class="subtitle">MEETING HOST LOTTERY</p>
+
+<div class="main-layout">
+  <div class="slot-wrapper">
+    <div class="slot-machine">
+      <div class="slot-reel" id="reel"></div>
+      <div class="highlight-line"></div>
+    </div>
+
+    <div class="winner-box" id="winner-box">？</div>
+
+    <button class="btn-draw" id="btn-draw" onclick="startDraw()">开始抽签</button>
+  </div>
+
+  <div class="participants-panel">
+    <div class="panel-title">参与名单 <span id="participant-count" style="font-weight:400;color:#666;letter-spacing:1px"></span></div>
+    <div class="participant-grid" id="participant-grid"></div>
+    <div class="add-participant-row">
+      <input class="add-input" id="add-input" type="text" placeholder="输入姓名添加成员" maxlength="40" />
+      <button class="add-btn" onclick="addParticipant()">添加</button>
+    </div>
+  </div>
+</div>
+
+<div class="history-section" id="history-section" style="display:none">
+  <div class="history-title">已抽出记录</div>
+  <div class="history-list" id="history-list"></div>
+  <button class="btn-reset" onclick="resetAll()">重置所有</button>
+</div>
+
+<script>
+let allParticipants = [
+  'Miles Wu','Leo Liang','Alpha Liu','Ning Wang','Eason Du',
+  'Dammy Hsu','Jenny Huang','Bruce Su','Tim Wu','Gary Lin',
+  'Andy Lin','Jimmy Chen','Weini Chang','Bennett Chuang','Backkom Ma',
+  'Molly Deng','Zachary Yuan','Misha He','Catherine Song','Norman Wei',
+  'Bryan Zhang','Frank Zhu','Aris Chen','Jiange Xu','Eric Chiu','Kennix Lee'
+];
+
+let pool = [...allParticipants];
+let history = [];
+let spinning = false;
+let animFrame = null;
+
+// ── Build reel ──
+function buildReel(names) {
+  const reel = document.getElementById('reel');
+  reel.innerHTML = '';
+  const repeated = [...names, ...names, ...names, ...names, ...names];
+  repeated.forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'slot-item';
+    div.textContent = n;
+    reel.appendChild(div);
+  });
+  reel.style.transform = 'translateY(0)';
+}
+
+// ── Build participant tags ──
+function buildGrid() {
+  const grid = document.getElementById('participant-grid');
+  grid.innerHTML = '';
+  allParticipants.forEach(name => {
+    grid.appendChild(makeTag(name));
+  });
+  updateCount();
+}
+
+function makeTag(name) {
+  const tag = document.createElement('div');
+  const inPool = pool.includes(name);
+  const isWinner = history.includes(name);
+  tag.className = 'p-tag' + (isWinner ? ' eliminated' : '') + (name === history[history.length - 1] && isWinner ? ' winner-tag' : '');
+  if (!inPool && !isWinner) tag.classList.add('eliminated');
+  tag.id = 'tag-' + name.replace(/\s/g,'_');
+
+  const label = document.createElement('span');
+  label.textContent = name;
+  tag.appendChild(label);
+
+  const btn = document.createElement('button');
+  btn.className = 'del-btn';
+  btn.title = '移除';
+  btn.textContent = '×';
+  btn.onclick = (e) => { e.stopPropagation(); removeParticipant(name); };
+  tag.appendChild(btn);
+
+  return tag;
+}
+
+function updateGrid(winner) {
+  allParticipants.forEach(name => {
+    const tag = document.getElementById('tag-' + name.replace(/\s/g,'_'));
+    if (!tag) return;
+    tag.className = 'p-tag';
+    if (name === winner) tag.classList.add('winner-tag');
+    else if (!pool.includes(name)) tag.classList.add('eliminated');
+  });
+  updateCount();
+}
+
+function updateCount() {
+  const el = document.getElementById('participant-count');
+  if (el) el.textContent = `(${pool.length}/${allParticipants.length})`;
+}
+
+// ── Add participant ──
+function addParticipant() {
+  const input = document.getElementById('add-input');
+  const name = input.value.trim();
+  if (!name) return;
+  if (allParticipants.includes(name)) {
+    input.style.borderColor = 'rgba(255,80,80,0.7)';
+    setTimeout(() => input.style.borderColor = '', 1000);
+    return;
+  }
+  allParticipants.push(name);
+  pool.push(name);
+  input.value = '';
+
+  const grid = document.getElementById('participant-grid');
+  grid.appendChild(makeTag(name));
+  updateCount();
+  buildReel(pool);
+
+  const btn = document.getElementById('btn-draw');
+  if (pool.length > 0) { btn.disabled = false; btn.textContent = '开始抽签'; }
+}
+
+// ── Remove participant ──
+function removeParticipant(name) {
+  if (spinning) return;
+  allParticipants = allParticipants.filter(n => n !== name);
+  pool = pool.filter(n => n !== name);
+  history = history.filter(n => n !== name);
+
+  const tag = document.getElementById('tag-' + name.replace(/\s/g,'_'));
+  if (tag) tag.remove();
+
+  updateCount();
+  buildReel(pool);
+
+  const btn = document.getElementById('btn-draw');
+  if (pool.length === 0) { btn.disabled = true; btn.textContent = '已全部抽完'; }
+  else { btn.disabled = false; }
+
+  const winnerBox = document.getElementById('winner-box');
+  if (winnerBox.textContent.includes(name)) {
+    winnerBox.textContent = '？';
+    winnerBox.className = 'winner-box';
+  }
+
+  if (history.length === 0) document.getElementById('history-section').style.display = 'none';
+  else updateHistory();
+}
+
+// ── Slot animation ──
+function startDraw() {
+  if (spinning || pool.length === 0) return;
+  if (pool.length === 1) {
+    // auto-pick last person
+    revealWinner(pool[0]);
+    return;
+  }
+  spinning = true;
+
+  const btn = document.getElementById('btn-draw');
+  btn.disabled = true;
+
+  const winnerBox = document.getElementById('winner-box');
+  winnerBox.textContent = '🎰';
+  winnerBox.className = 'winner-box';
+
+  buildReel(pool);
+
+  const reel = document.getElementById('reel');
+  const itemH = 90;
+  const totalItems = pool.length * 5;
+  const maxOffset = -(totalItems - 1) * itemH;
+
+  // pick winner index in the middle repetition
+  const winnerIndex = Math.floor(Math.random() * pool.length);
+  const winner = pool[winnerIndex];
+
+  // target: land on winner in 3rd repetition
+  const targetOffset = -((pool.length * 2 + winnerIndex) * itemH);
+
+  const duration = 3200;
+  const start = performance.now();
+
+  function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
+
+  function animate(now) {
+    const elapsed = now - start;
+    const t = Math.min(elapsed / duration, 1);
+    const eased = easeOut(t);
+
+    // fast spin phase then slow to target
+    let offset;
+    if (t < 0.6) {
+      // fast spinning: overshoot past target
+      offset = -eased * (Math.abs(targetOffset) + pool.length * itemH * 1.5);
+    } else {
+      // ease into target
+      const tSlow = (t - 0.6) / 0.4;
+      const easedSlow = easeOut(tSlow);
+      const fastEnd = -(Math.abs(targetOffset) + pool.length * itemH * 1.5);
+      offset = fastEnd + (targetOffset - fastEnd) * easedSlow;
+    }
+
+    reel.style.transform = `translateY(${offset}px)`;
+
+    if (t < 1) {
+      animFrame = requestAnimationFrame(animate);
+    } else {
+      reel.style.transform = `translateY(${targetOffset}px)`;
+      spinning = false;
+      revealWinner(winner);
+    }
+  }
+
+  animFrame = requestAnimationFrame(animate);
+}
+
+function revealWinner(winner) {
+  const winnerBox = document.getElementById('winner-box');
+  winnerBox.textContent = '🏆 ' + winner;
+  winnerBox.className = 'winner-box revealed';
+
+  // remove from pool
+  pool = pool.filter(n => n !== winner);
+  history.push(winner);
+
+  updateGrid(winner);
+  updateHistory();
+
+  const btn = document.getElementById('btn-draw');
+  btn.disabled = false;
+  btn.textContent = pool.length > 0 ? '再抽一次' : '已全部抽完';
+  if (pool.length === 0) btn.disabled = true;
+
+  launchConfetti();
+}
+
+function updateHistory() {
+  const section = document.getElementById('history-section');
+  const list = document.getElementById('history-list');
+  section.style.display = 'block';
+  list.innerHTML = '';
+  history.forEach((name, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'history-chip';
+    chip.textContent = `#${i + 1} ${name}`;
+    list.appendChild(chip);
+  });
+}
+
+function resetAll() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  spinning = false;
+  pool = [...allParticipants];
+  history = [];
+
+  const winnerBox = document.getElementById('winner-box');
+  winnerBox.textContent = '？';
+  winnerBox.className = 'winner-box';
+
+  buildReel(pool);
+  buildGrid();
+
+  const btn = document.getElementById('btn-draw');
+  btn.disabled = false;
+  btn.textContent = '开始抽签';
+
+  document.getElementById('history-section').style.display = 'none';
+}
+
+// ── Confetti ──
+function launchConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const colors = ['#ffd700','#ff4e50','#f9d423','#00e5ff','#69ff47','#ff6ec7'];
+  const pieces = Array.from({length: 120}, () => ({
+    x: Math.random() * canvas.width,
+    y: -10 - Math.random() * 200,
+    r: 4 + Math.random() * 6,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    vx: -2 + Math.random() * 4,
+    vy: 3 + Math.random() * 5,
+    angle: Math.random() * Math.PI * 2,
+    spin: -0.1 + Math.random() * 0.2,
+    alpha: 1
+  }));
+
+  let cf = null;
+  function drawConfetti() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.angle += p.spin;
+      if (p.y > canvas.height * 0.7) p.alpha -= 0.015;
+      if (p.alpha > 0 && p.y < canvas.height) {
+        alive = true;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.5);
+        ctx.restore();
+      }
+    });
+    if (alive) cf = requestAnimationFrame(drawConfetti);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  if (cf) cancelAnimationFrame(cf);
+  cf = requestAnimationFrame(drawConfetti);
+}
+
+// ── Init ──
+buildReel(pool);
+buildGrid();
+document.getElementById('add-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addParticipant();
+});
+</script>
+</body>
+</html>
